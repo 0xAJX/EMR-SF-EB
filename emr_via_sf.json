@@ -1,40 +1,84 @@
 {
-  "Comment": "An example of the Amazon States Language for running jobs on Amazon EMR",
+  "Comment": "An example EMR State Machine",
   "StartAt": "Create an EMR cluster",
   "States": {
     "Create an EMR cluster": {
       "Type": "Task",
-      "Resource": "arn:<PARTITION>:states:::elasticmapreduce:createCluster.sync",
+      "Resource": "arn:aws:states:::elasticmapreduce:createCluster.sync",
       "Parameters": {
-        "Name": "ExampleCluster",
+        "Name": "EMR-6.2.0",
         "VisibleToAllUsers": true,
-        "ReleaseLabel": "emr-5.26.0",
+        "ReleaseLabel": "emr-6.2.0",
+        "AutoTerminationPolicy": {
+          "IdleTimeout": 900
+        },
         "Applications": [
-          { "Name": "Hive" }
+          {
+            "Name": "Spark"
+          },
+          {
+            "Name": "Hadoop"
+          }
         ],
-        "ServiceRole": "<EMR_SERVICE_ROLE>",
-        "JobFlowRole": "<EMR_EC2_INSTANCE_PROFILE>",
-        "LogUri": "s3://<EMR_LOG_S3_BUCKET>/logs/",
+        "ServiceRole": "<EMR_Role>",
+        "JobFlowRole": "<EMR_EC2_Role>",
+        "LogUri": "<logs-uri>",
         "Instances": {
           "KeepJobFlowAliveWhenNoSteps": true,
           "InstanceFleets": [
             {
               "Name": "MyMasterFleet",
               "InstanceFleetType": "MASTER",
-              "TargetOnDemandCapacity": 1,
+              "TargetSpotCapacity": 1,
+              "LaunchSpecifications": {
+                "SpotSpecification": {
+                  "TimeoutDurationMinutes": 20,
+                  "TimeoutAction": "SWITCH_TO_ON_DEMAND"
+                }
+              },
               "InstanceTypeConfigs": [
                 {
-                  "InstanceType": "m5.xlarge"
+                  "InstanceType": "m5.xlarge",
+                  "EbsConfiguration": {
+                    "EbsBlockDeviceConfigs": [
+                      {
+                        "VolumeSpecification": {
+                          "VolumeType": "gp3",
+                          "SizeInGB": 15
+                        },
+                        "VolumesPerInstance": 1
+                      }
+                    ],
+                    "EbsOptimized": "False"
+                  }
                 }
               ]
             },
             {
               "Name": "MyCoreFleet",
               "InstanceFleetType": "CORE",
-              "TargetOnDemandCapacity": 1,
+              "TargetSpotCapacity": 1,
+              "LaunchSpecifications": {
+                "SpotSpecification": {
+                  "TimeoutDurationMinutes": 20,
+                  "TimeoutAction": "SWITCH_TO_ON_DEMAND"
+                }
+              },
               "InstanceTypeConfigs": [
                 {
-                  "InstanceType": "m5.xlarge"
+                  "InstanceType": "m5.xlarge",
+                  "EbsConfiguration": {
+                    "EbsBlockDeviceConfigs": [
+                      {
+                        "VolumeSpecification": {
+                          "VolumeType": "gp3",
+                          "SizeInGB": 15
+                        },
+                        "VolumesPerInstance": 1
+                      }
+                    ],
+                    "EbsOptimized": "False"
+                  }
                 }
               ]
             }
@@ -46,57 +90,39 @@
     },
     "Run first step": {
       "Type": "Task",
-      "Resource": "arn:<PARTITION>:states:::elasticmapreduce:addStep.sync",
+      "Resource": "arn:aws:states:::elasticmapreduce:addStep.sync",
       "Parameters": {
         "ClusterId.$": "$.cluster.ClusterId",
         "Step": {
-          "Name": "My first EMR step",
+          "Name": "First EMR step",
           "ActionOnFailure": "CONTINUE",
           "HadoopJarStep": {
             "Jar": "command-runner.jar",
-            "Args": ["<COMMAND_ARGUMENTS>"]
+            "Args": [
+              "spark-submit",
+              "--deploy-mode",
+              "cluster",
+              "<test.py>"
+            ]
           }
         }
       },
-      "Retry" : [
+      "Retry": [
         {
-          "ErrorEquals": [ "States.ALL" ],
+          "ErrorEquals": [
+            "States.ALL"
+          ],
           "IntervalSeconds": 1,
           "MaxAttempts": 3,
-          "BackoffRate": 2.0
+          "BackoffRate": 2
         }
       ],
       "ResultPath": "$.firstStep",
-      "Next": "Run second step"
-    },
-    "Run second step": {
-      "Type": "Task",
-      "Resource": "arn:<PARTITION>:states:::elasticmapreduce:addStep.sync",
-      "Parameters": {
-        "ClusterId.$": "$.cluster.ClusterId",
-        "Step": {
-          "Name": "My second EMR step",
-          "ActionOnFailure": "CONTINUE",
-          "HadoopJarStep": {
-            "Jar": "command-runner.jar",
-            "Args": ["<COMMAND_ARGUMENTS>"]
-          }
-        }
-      },
-      "Retry" : [
-        {
-          "ErrorEquals": [ "States.ALL" ],
-          "IntervalSeconds": 1,
-          "MaxAttempts": 3,
-          "BackoffRate": 2.0
-        }
-      ],
-      "ResultPath": "$.secondStep",
       "Next": "Terminate Cluster"
     },
     "Terminate Cluster": {
       "Type": "Task",
-      "Resource": "arn:<PARTITION>:states:::elasticmapreduce:terminateCluster",
+      "Resource": "arn:aws:states:::elasticmapreduce:terminateCluster",
       "Parameters": {
         "ClusterId.$": "$.cluster.ClusterId"
       },
