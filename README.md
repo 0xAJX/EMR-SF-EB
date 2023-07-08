@@ -1,1 +1,1 @@
-# EMR-SF-EB
+## Sample data pipeline using EMR, Step Functions and EventBridge
