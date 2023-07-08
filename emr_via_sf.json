@@ -122,7 +122,7 @@
     },
     "Terminate Cluster": {
       "Type": "Task",
-      "Resource": "arn:aws:states:::elasticmapreduce:terminateCluster",
+      "Resource": "arn:aws:states:::elasticmapreduce:terminateCluster.sync",
       "Parameters": {
         "ClusterId.$": "$.cluster.ClusterId"
       },
